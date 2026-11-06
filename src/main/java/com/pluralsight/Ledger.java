@@ -11,22 +11,34 @@ import java.util.List;
 // Handles saving, retrieving, sorting, and displaying transactions.
 public class Ledger {
 
-   // public ArrayList<Transaction> transactions = new ArrayList<>();
+    // MEMORY BANK: Holds transactions while Studio Ledger is running.
+    private final List<Transaction> transactions = new ArrayList<>();
+
+    // Tracks whether transactions have already been loaded from the CSV.
+    private boolean transactionsLoaded = false;
 
     // Defines where Studio Ledger stores its financial records.
     private final Path filePath =
             Path.of("src", "main", "resources", "transactions.csv");
 
-    // Saves a new transaction without deleting existing records.
+    // Saves a new transaction and adds it to the memory bank.
     public void addTransaction(Transaction transaction) {
 
         try {
+            // Load existing records before adding a new one.
+            loadTransactions();
+
+            // Save the transaction permanently in the CSV file.
             Files.writeString(
                     filePath,
                     transaction.toCsv() + System.lineSeparator(),
                     StandardOpenOption.CREATE,
                     StandardOpenOption.APPEND
             );
+
+            // Update the memory bank immediately.
+            transactions.add(transaction);
+            sortTransactions();
 
             System.out.println("Transaction successfully saved!");
 
@@ -35,23 +47,19 @@ public class Ledger {
         }
     }
 
-    // Reads all previously saved transactions from the CSV file.
-    public List<Transaction> getAllTransactions() {
+    // Loads saved transactions into memory only once.
+    private void loadTransactions() throws IOException {
 
-        List<Transaction> transactions = new ArrayList<>();
+        if (transactionsLoaded) {
+            return;
+        }
 
-        try {
-            // If the file does not exist yet, return an empty list.
-            if (!Files.exists(filePath)) {
-                return transactions;
-            }
+        if (Files.exists(filePath)) {
 
             List<String> lines = Files.readAllLines(filePath);
 
-            // Process each saved transaction one line at a time.
             for (String line : lines) {
 
-                // Split the line into its five transaction fields.
                 String[] parts = line.split("\\|", -1);
 
                 if (parts.length == 5) {
@@ -62,7 +70,6 @@ public class Ledger {
                         String vendor = parts[3];
                         double amount = Double.parseDouble(parts[4]);
 
-                        // Reconstruct the transaction as a Java object.
                         Transaction transaction = new Transaction(
                                 date, time, description, vendor, amount
                         );
@@ -75,23 +82,43 @@ public class Ledger {
                         );
                     }
                 } else {
-                    System.out.println("Skipping incorrectly formatted record.");
+                    System.out.println(
+                            "Skipping incorrectly formatted record."
+                    );
                 }
             }
-
-        } catch (IOException e) {
-            System.out.println("Error reading transactions: " + e.getMessage());
         }
 
-        // Sort by date and time, placing the newest transaction first.
-        // HH:mm uses a consistent 24-hour format, so alphabetical sorting works.
+        // Prevents the CSV file from being loaded repeatedly.
+        transactionsLoaded = true;
+
+        sortTransactions();
+    }
+
+    // Returns all transactions from the memory bank, newest first.
+    public List<Transaction> getAllTransactions() {
+
+        try {
+            loadTransactions();
+
+        } catch (IOException e) {
+            System.out.println(
+                    "Error reading transactions: " + e.getMessage()
+            );
+        }
+
+        // Returns a copy so outside code cannot accidentally change the memory bank.
+        return new ArrayList<>(transactions);
+    }
+
+    // Sorts the memory bank by date and time, newest first.
+    private void sortTransactions() {
+
         transactions.sort(
                 Comparator.comparing(Transaction::getDate)
                         .thenComparing(Transaction::getTime)
                         .reversed()
         );
-
-        return transactions;
     }
 
     // Displays a collection of transactions in a readable format.
@@ -103,6 +130,7 @@ public class Ledger {
         }
 
         System.out.println();
+
         System.out.printf(
                 "%-12s %-7s %-30s %-22s %12s%n",
                 "DATE", "TIME", "DESCRIPTION", "VENDOR", "AMOUNT"

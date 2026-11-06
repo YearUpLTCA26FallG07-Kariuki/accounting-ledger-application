@@ -64,7 +64,7 @@ public class AccountingLedger {
         // Close the Scanner when the application is finished.
         scanner.close();
     }
-
+ 
     // Collects income information and saves it as a positive transaction.
     private static void addIncome(Scanner scanner, Ledger ledger) {
 
